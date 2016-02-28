@@ -17,6 +17,15 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center" />
+
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:id="@+id/overlay"
+            android:background="#B3000000"/>
+
+
     </FrameLayout>
 
     <TextView
@@ -33,6 +42,8 @@
     <FrameLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:id="@+id/buttons_layout"
+        android:visibility="gone"
         android:layout_alignParentBottom="true"
         android:layout_alignParentRight="true" >
 
@@ -44,7 +55,8 @@
 
             <Button
                 android:id="@+id/start"
-                android:layout_width="wrap_content"
+                android:layout_weight="1"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:contentDescription="@string/start"
 
@@ -52,34 +64,148 @@
 
             <Button
                 android:id="@+id/flash"
-                android:layout_width="wrap_content"
+                android:layout_weight="1"
+                android:layout_width="match_parent"
+                android:text="Flash"
                 android:layout_height="match_parent"
                 android:contentDescription="@string/flash"
                  />
 
             <Button
-                android:id="@+id/camera"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:contentDescription="@string/camera"
-                 />
-
-            <Button
                 android:id="@+id/settings"
-                android:layout_width="wrap_content"
+                android:layout_weight="1"
+                android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:text="Settings"
                 android:contentDescription="@string/video"
                 />
         </LinearLayout>
     </FrameLayout>
 
+
+
+
+    <FrameLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/emergancy_button_layout"
+        android:layout_centerInParent="true"
+         >
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_marginLeft="10dip"
+            android:layout_marginRight="10dip"
+            android:orientation="horizontal" >
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:orientation="vertical"
+                android:layout_weight="1"
+                android:layout_height="wrap_content">
+
+                <ImageButton
+                    android:id="@+id/fire_dp"
+
+                    android:background="@drawable/fire"
+                    android:layout_width="100dip"
+                    android:layout_height="100dip"
+                    android:contentDescription="@string/start"
+                    android:text="@string/start" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:textColor="#ffffff"
+                    android:gravity="center"
+                    android:layout_marginTop="10dip"
+                    android:layout_height="wrap_content"
+                    android:text="מכבי אש"/>
+
+            </LinearLayout>
+
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:orientation="vertical"
+                android:layout_weight="1"
+                android:layout_marginLeft="15dip"
+                android:layout_marginRight="15dip"
+                android:layout_height="wrap_content">
+
+                <ImageButton
+                    android:id="@+id/medical_dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/medical"
+                    android:layout_width="100dip"
+                    android:layout_height="100dip"
+                    android:contentDescription="@string/flash"
+                    />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:textColor="#ffffff"
+                    android:gravity="center"
+                    android:layout_marginTop="10dip"
+                    android:layout_height="wrap_content"
+                    android:text="מגן דויד אדום"/>
+
+            </LinearLayout>
+
+
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:orientation="vertical"
+                android:layout_weight="1"
+                android:layout_height="wrap_content">
+
+                <ImageButton
+                    android:id="@+id/police_dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/police"
+                    android:layout_width="100dip"
+                    android:layout_height="100dip"
+                    android:contentDescription="@string/video"
+                    />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:textColor="#ffffff"
+                    android:gravity="center"
+                    android:layout_marginTop="10dip"
+                    android:layout_height="wrap_content"
+                    android:text="משטרה"/>
+
+            </LinearLayout>
+
+        </LinearLayout>
+    </FrameLayout>
+
+
     <include layout="@layout/video_settings" />
 
     <include layout="@layout/server_settings" />
 
+
+    <include layout="@layout/chat_layout" />
+
+
+
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent" >
+
+
+        <ImageView
+            android:layout_gravity="center_horizontal"
+            android:id="@+id/logo"
+            android:layout_marginTop="10dip"
+            android:src="@drawable/logo"
+            android:layout_width="200dip"
+            android:layout_height="wrap_content"
+            />
+
 
         <ProgressBar
             android:visibility="gone"

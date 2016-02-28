@@ -20,14 +20,6 @@
 
 package net.majorkernelpanic.streaming;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.InetAddress;
-import java.util.Random;
-
-import net.majorkernelpanic.streaming.audio.AudioStream;
-import net.majorkernelpanic.streaming.rtp.AbstractPacketizer;
-import net.majorkernelpanic.streaming.video.VideoStream;
 import android.annotation.SuppressLint;
 import android.media.MediaCodec;
 import android.media.MediaRecorder;
@@ -38,6 +30,15 @@ import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
 
+import net.majorkernelpanic.streaming.audio.AudioStream;
+import net.majorkernelpanic.streaming.rtp.AbstractPacketizer;
+import net.majorkernelpanic.streaming.video.VideoStream;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.util.Random;
+
 /**
  * A MediaRecorder that streams what it records using a packetizer from the RTP package.
  * You can't use this class directly !
@@ -45,7 +46,7 @@ import android.util.Log;
 public abstract class MediaStream implements Stream {
 
 	protected static final String TAG = "MediaStream";
-	
+
 	/** Raw audio/video will be encoded using the MediaRecorder API. */
 	public static final byte MODE_MEDIARECORDER_API = 0x01;
 
@@ -57,10 +58,10 @@ public abstract class MediaStream implements Stream {
 
 	/** A LocalSocket will be used to feed the MediaRecorder object */
 	public static final byte PIPE_API_LS = 0x01;
-	
+
 	/** A ParcelFileDescriptor will be used to feed the MediaRecorder object */
 	public static final byte PIPE_API_PFD = 0x02;
-	
+
 	/** Prefix that will be used for all shared preferences saved by libstreaming */
 	protected static final String PREF_PREFIX = "libstreaming-";
 
@@ -70,32 +71,32 @@ public abstract class MediaStream implements Stream {
 	protected static byte sSuggestedMode = MODE_MEDIARECORDER_API;
 	protected byte mMode, mRequestedMode;
 
-	/** 
-	 * Starting lollipop the LocalSocket API cannot be used to feed a MediaRecorder object. 
-	 * You can force what API to use to create the pipe that feeds it with this constant 
+	/**
+	 * Starting lollipop the LocalSocket API cannot be used to feed a MediaRecorder object.
+	 * You can force what API to use to create the pipe that feeds it with this constant
 	 * by using  {@link #PIPE_API_LS} and {@link #PIPE_API_PFD}.
 	 */
 	protected final static byte sPipeApi;
-	
+
 	protected boolean mStreaming = false, mConfigured = false;
-	protected int mRtpPort = 0, mRtcpPort = 0; 
+	protected int mRtpPort = 0, mRtcpPort = 0;
 	protected byte mChannelIdentifier = 0;
 	protected OutputStream mOutputStream = null;
 	protected InetAddress mDestination;
-	
+
 	protected ParcelFileDescriptor[] mParcelFileDescriptors;
 	protected ParcelFileDescriptor mParcelRead;
 	protected ParcelFileDescriptor mParcelWrite;
-	
+
 	protected LocalSocket mReceiver, mSender = null;
 	private LocalServerSocket mLss = null;
-	private int mSocketId; 
-	
+	private int mSocketId;
+
 	private int mTTL = 64;
 
 	protected MediaRecorder mMediaRecorder;
 	protected MediaCodec mMediaCodec;
-	
+
 	static {
 		// We determine whether or not the MediaCodec API should be used
 		try {
@@ -107,8 +108,8 @@ public abstract class MediaStream implements Stream {
 			sSuggestedMode = MODE_MEDIARECORDER_API;
 			Log.i(TAG,"Phone does not support the MediaCodec API");
 		}
-		
-		// Starting lollipop, the LocalSocket API cannot be used anymore to feed 
+
+		// Starting lollipop, the LocalSocket API cannot be used anymore to feed
 		// a MediaRecorder object for security reasons
 		if (Build.VERSION.SDK_INT > Build.VERSION_CODES.KITKAT_WATCH) {
 			sPipeApi = PIPE_API_PFD;
@@ -122,17 +123,17 @@ public abstract class MediaStream implements Stream {
 		mMode = sSuggestedMode;
 	}
 
-	/** 
+	/**
 	 * Sets the destination IP address of the stream.
-	 * @param dest The destination address of the stream 
-	 */	
+	 * @param dest The destination address of the stream
+	 */
 	public void setDestinationAddress(InetAddress dest) {
 		mDestination = dest;
 	}
 
-	/** 
+	/**
 	 * Sets the destination ports of the stream.
-	 * If an odd number is supplied for the destination port then the next 
+	 * If an odd number is supplied for the destination port then the next
 	 * lower even number will be used for RTP and it will be used for RTCP.
 	 * If an even number is supplied, it will be used for RTP and the next odd
 	 * number will be used for RTCP.
@@ -157,19 +158,19 @@ public abstract class MediaStream implements Stream {
 		mRtpPort = rtpPort;
 		mRtcpPort = rtcpPort;
 		mOutputStream = null;
-	}	
+	}
 
 	/**
 	 * If a TCP is used as the transport protocol for the RTP session,
 	 * the output stream to which RTP packets will be written to must
 	 * be specified with this method.
-	 */ 
+	 */
 	public void setOutputStream(OutputStream stream, byte channelIdentifier) {
 		mOutputStream = stream;
 		mChannelIdentifier = channelIdentifier;
 	}
-	
-	
+
+
 	/**
 	 * Sets the Time To Live of packets sent over the network.
 	 * @param ttl The time to live
@@ -179,9 +180,9 @@ public abstract class MediaStream implements Stream {
 		mTTL = ttl;
 	}
 
-	/** 
-	 * Returns a pair of destination ports, the first one is the 
-	 * one used for RTP and the second one is used for RTCP. 
+	/**
+	 * Returns a pair of destination ports, the first one is the
+	 * one used for RTP and the second one is used for RTCP.
 	 **/
 	public int[] getDestinationPorts() {
 		return new int[] {
@@ -190,45 +191,45 @@ public abstract class MediaStream implements Stream {
 		};
 	}
 
-	/** 
-	 * Returns a pair of source ports, the first one is the 
-	 * one used for RTP and the second one is used for RTCP. 
-	 **/	
+	/**
+	 * Returns a pair of source ports, the first one is the
+	 * one used for RTP and the second one is used for RTCP.
+	 **/
 	public int[] getLocalPorts() {
 		return mPacketizer.getRtpSocket().getLocalPorts();
 	}
 
 	/**
 	 * Sets the streaming method that will be used.
-	 * 
-	 * If the mode is set to {@link #MODE_MEDIARECORDER_API}, raw audio/video will be encoded 
+	 *
+	 * If the mode is set to {@link #MODE_MEDIARECORDER_API}, raw audio/video will be encoded
 	 * using the MediaRecorder API. <br />
-	 * 
-	 * If the mode is set to {@link #MODE_MEDIACODEC_API} or to {@link #MODE_MEDIACODEC_API_2}, 
+	 *
+	 * If the mode is set to {@link #MODE_MEDIACODEC_API} or to {@link #MODE_MEDIACODEC_API_2},
 	 * audio/video will be encoded with using the MediaCodec. <br />
-	 * 
-	 * The {@link #MODE_MEDIACODEC_API_2} mode only concerns {@link VideoStream}, it makes 
+	 *
+	 * The {@link #MODE_MEDIACODEC_API_2} mode only concerns {@link VideoStream}, it makes
 	 * use of the createInputSurface() method of the MediaCodec API (Android 4.3 is needed there). <br />
-	 * 
-	 * @param mode Can be {@link #MODE_MEDIARECORDER_API}, {@link #MODE_MEDIACODEC_API} or {@link #MODE_MEDIACODEC_API_2} 
+	 *
+	 * @param mode Can be {@link #MODE_MEDIARECORDER_API}, {@link #MODE_MEDIACODEC_API} or {@link #MODE_MEDIACODEC_API_2}
 	 */
 	public void setStreamingMethod(byte mode) {
 		mRequestedMode = mode;
 	}
 
 	/**
-	 * Returns the streaming method in use, call this after 
-	 * {@link #configure()} to get an accurate response. 
+	 * Returns the streaming method in use, call this after
+	 * {@link #configure()} to get an accurate response.
 	 */
 	public byte getStreamingMethod() {
 		return mMode;
-	}		
-	
+	}
+
 	/**
 	 * Returns the packetizer associated with the {@link MediaStream}.
 	 * @return The packetizer
 	 */
-	public AbstractPacketizer getPacketizer() { 
+	public AbstractPacketizer getPacketizer() {
 		return mPacketizer;
 	}
 
@@ -236,7 +237,7 @@ public abstract class MediaStream implements Stream {
 	 * Returns an approximation of the bit rate consumed by the stream in bit per seconde.
 	 */
 	public long getBitrate() {
-		return !mStreaming ? 0 : mPacketizer.getRtpSocket().getBitrate(); 
+		return !mStreaming ? 0 : mPacketizer.getRtpSocket().getBitrate();
 	}
 
 	/**
@@ -248,7 +249,7 @@ public abstract class MediaStream implements Stream {
 	}
 
 	/**
-	 * Configures the stream with the settings supplied with 
+	 * Configures the stream with the settings supplied with
 	 * {@link VideoStream#setVideoQuality(net.majorkernelpanic.streaming.video.VideoQuality)}
 	 * for a {@link VideoStream} and {@link AudioStream#setAudioQuality(net.majorkernelpanic.streaming.audio.AudioQuality)}
 	 * for a {@link AudioStream}.
@@ -262,10 +263,10 @@ public abstract class MediaStream implements Stream {
 		mMode = mRequestedMode;
 		mConfigured = true;
 	}
-	
+
 	/** Starts the stream. */
 	public synchronized void start() throws IllegalStateException, IOException {
-		
+
 		if (mDestination==null)
 			throw new IllegalStateException("No destination ip address set for the stream !");
 
@@ -273,17 +274,18 @@ public abstract class MediaStream implements Stream {
 			throw new IllegalStateException("No destination ports set for the stream !");
 
 		mPacketizer.setTimeToLive(mTTL);
-		
+
 		if (mMode != MODE_MEDIARECORDER_API) {
 			encodeWithMediaCodec();
 		} else {
-			encodeWithMediaRecorder();
+//			encodeWithMediaRecorder();
+			encodeWithMediaCodec();
 		}
 
 	}
 
 	/** Stops the stream. */
-	@SuppressLint("NewApi") 
+	@SuppressLint("NewApi")
 	public synchronized  void stop() {
 		if (mStreaming) {
 			try {
@@ -301,22 +303,22 @@ public abstract class MediaStream implements Stream {
 				}
 			} catch (Exception e) {
 				e.printStackTrace();
-			}	
+			}
 			mStreaming = false;
 		}
 	}
- 
+
 	protected abstract void encodeWithMediaRecorder() throws IOException;
 
 	protected abstract void encodeWithMediaCodec() throws IOException;
-	
+
 	/**
 	 * Returns a description of the stream using SDP. 
 	 * This method can only be called after {@link Stream#configure()}.
 	 * @throws IllegalStateException Thrown when {@link Stream#configure()} was not called.
 	 */
 	public abstract String getSessionDescription();
-	
+
 	/**
 	 * Returns the SSRC of the underlying {@link net.majorkernelpanic.streaming.rtp.RtpSocket}.
 	 * @return the SSRC of the stream
@@ -324,13 +326,13 @@ public abstract class MediaStream implements Stream {
 	public int getSSRC() {
 		return getPacketizer().getSSRC();
 	}
-	
+
 	protected void createSockets() throws IOException {
 
 		if (sPipeApi == PIPE_API_LS) {
-			
+
 			final String LOCAL_ADDR = "net.majorkernelpanic.streaming-";
-	
+
 			for (int i=0;i<10;i++) {
 				try {
 					mSocketId = new Random().nextInt();
@@ -338,14 +340,14 @@ public abstract class MediaStream implements Stream {
 					break;
 				} catch (IOException e1) {}
 			}
-	
+
 			mReceiver = new LocalSocket();
 			mReceiver.connect( new LocalSocketAddress(LOCAL_ADDR+mSocketId));
 			mReceiver.setReceiveBufferSize(500000);
 			mReceiver.setSoTimeout(3000);
 			mSender = mLss.accept();
 			mSender.setSendBufferSize(500000);
-			
+
 		} else {
 			Log.e(TAG, "parcelFileDescriptors createPipe version = Lollipop");
 			mParcelFileDescriptors = ParcelFileDescriptor.createPipe();
@@ -374,7 +376,7 @@ public abstract class MediaStream implements Stream {
 			mLss = null;
 			mSender = null;
 			mReceiver = null;
-			
+
 		} else {
 			try {
 				if (mParcelRead != null) {
@@ -392,5 +394,5 @@ public abstract class MediaStream implements Stream {
 			}
 		}
 	}
-	
+
 }

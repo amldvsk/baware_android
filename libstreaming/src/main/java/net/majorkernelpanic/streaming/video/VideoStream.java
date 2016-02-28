@@ -20,22 +20,6 @@
 
 package net.majorkernelpanic.streaming.video;
 
-import java.io.FileDescriptor;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
-
-import net.majorkernelpanic.streaming.MediaStream;
-import net.majorkernelpanic.streaming.Stream;
-import net.majorkernelpanic.streaming.exceptions.CameraInUseException;
-import net.majorkernelpanic.streaming.exceptions.ConfNotSupportedException;
-import net.majorkernelpanic.streaming.exceptions.InvalidSurfaceException;
-import net.majorkernelpanic.streaming.gl.SurfaceView;
-import net.majorkernelpanic.streaming.hw.EncoderDebugger;
-import net.majorkernelpanic.streaming.hw.NV21Convertor;
-import net.majorkernelpanic.streaming.rtp.MediaCodecInputStream;
 import android.annotation.SuppressLint;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
@@ -50,23 +34,40 @@ import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
 import android.view.Surface;
-import android.view.SurfaceHolder;
 import android.view.SurfaceHolder.Callback;
+import android.view.SurfaceView;
 
-/** 
+
+import net.majorkernelpanic.streaming.MediaStream;
+import net.majorkernelpanic.streaming.Stream;
+import net.majorkernelpanic.streaming.exceptions.CameraInUseException;
+import net.majorkernelpanic.streaming.exceptions.ConfNotSupportedException;
+import net.majorkernelpanic.streaming.exceptions.InvalidSurfaceException;
+import net.majorkernelpanic.streaming.hw.EncoderDebugger;
+import net.majorkernelpanic.streaming.hw.NV21Convertor;
+import net.majorkernelpanic.streaming.rtp.MediaCodecInputStream;
+
+import java.io.FileDescriptor;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+
+/**
  * Don't use this class directly.
  */
 public abstract class VideoStream extends MediaStream {
 
-	protected final static String TAG = "VideoStream";
+	public final static String TAG =VideoStream.class.getSimpleName();
 
 	protected VideoQuality mRequestedQuality = VideoQuality.DEFAULT_VIDEO_QUALITY.clone();
-	protected VideoQuality mQuality = mRequestedQuality.clone(); 
-	protected SurfaceHolder.Callback mSurfaceHolderCallback = null;
+	protected VideoQuality mQuality = mRequestedQuality.clone();
+	protected Callback mSurfaceHolderCallback = null;
 	protected SurfaceView mSurfaceView = null;
 	protected SharedPreferences mSettings = null;
 	protected int mVideoEncoder, mCameraId = 0;
-	protected int mRequestedOrientation = 0, mOrientation = 0;
+	protected int mRequestedOrientation = 90, mOrientation = 90;
 	protected Camera mCamera;
 	protected Thread mCameraThread;
 	protected Looper mCameraLooper;
@@ -77,22 +78,22 @@ public abstract class VideoStream extends MediaStream {
 	protected boolean mUnlocked = false;
 	protected boolean mPreviewStarted = false;
 	protected boolean mUpdated = false;
-	
+
 	protected String mMimeType;
 	protected String mEncoderName;
 	protected int mEncoderColorFormat;
 	protected int mCameraImageFormat;
-	protected int mMaxFps = 0;	
+	protected int mMaxFps = 0;
 
-	/** 
+	/**
 	 * Don't use this class directly.
 	 * Uses CAMERA_FACING_BACK by default.
 	 */
 	public VideoStream() {
 		this(CameraInfo.CAMERA_FACING_BACK);
-	}	
+	}
 
-	/** 
+	/**
 	 * Don't use this class directly
 	 * @param camera Can be either CameraInfo.CAMERA_FACING_BACK or CameraInfo.CAMERA_FACING_FRONT
 	 */
@@ -119,28 +120,28 @@ public abstract class VideoStream extends MediaStream {
 		}
 	}
 
-	/**	Switch between the front facing and the back facing camera of the phone. 
-	 * If {@link #startPreview()} has been called, the preview will be  briefly interrupted. 
+	/**	Switch between the front facing and the back facing camera of the phone.
+	 * If {@link #startPreview()} has been called, the preview will be  briefly interrupted.
 	 * If {@link #start()} has been called, the stream will be  briefly interrupted.
-	 * You should not call this method from the main thread if you are already streaming. 
-	 * @throws IOException 
-	 * @throws RuntimeException 
+	 * You should not call this method from the main thread if you are already streaming.
+	 * @throws IOException
+	 * @throws RuntimeException
 	 **/
 	public void switchCamera() throws RuntimeException, IOException {
 		if (Camera.getNumberOfCameras() == 1) throw new IllegalStateException("Phone only has one camera !");
 		boolean streaming = mStreaming;
-		boolean previewing = mCamera!=null && mCameraOpenedManually; 
-		mCameraId = (mCameraId == CameraInfo.CAMERA_FACING_BACK) ? CameraInfo.CAMERA_FACING_FRONT : CameraInfo.CAMERA_FACING_BACK; 
+		boolean previewing = mCamera!=null && mCameraOpenedManually;
+		mCameraId = (mCameraId == CameraInfo.CAMERA_FACING_BACK) ? CameraInfo.CAMERA_FACING_FRONT : CameraInfo.CAMERA_FACING_BACK;
 		setCamera(mCameraId);
 		stopPreview();
 		mFlashEnabled = false;
 		if (previewing) startPreview();
-		if (streaming) start(); 
+		if (streaming) start();
 	}
 
 	/**
-	 * Returns the id of the camera currently selected. 
-	 * Can be either {@link CameraInfo#CAMERA_FACING_BACK} or 
+	 * Returns the id of the camera currently selected.
+	 * Can be either {@link CameraInfo#CAMERA_FACING_BACK} or
 	 * {@link CameraInfo#CAMERA_FACING_FRONT}.
 	 */
 	public int getCamera() {
@@ -148,34 +149,12 @@ public abstract class VideoStream extends MediaStream {
 	}
 
 	/**
-	 * Sets a Surface to show a preview of recorded media (video). 
+	 * Sets a Surface to show a preview of recorded media (video).
 	 * You can call this method at any time and changes will take effect next time you call {@link #start()}.
 	 */
 	public synchronized void setSurfaceView(SurfaceView view) {
 		mSurfaceView = view;
-		if (mSurfaceHolderCallback != null && mSurfaceView != null && mSurfaceView.getHolder() != null) {
-			mSurfaceView.getHolder().removeCallback(mSurfaceHolderCallback);
-		}
-		if (mSurfaceView.getHolder() != null) {
-			mSurfaceHolderCallback = new Callback() {
-				@Override
-				public void surfaceDestroyed(SurfaceHolder holder) {
-					mSurfaceReady = false;
-					stopPreview();
-					Log.d(TAG,"Surface destroyed !");
-				}
-				@Override
-				public void surfaceCreated(SurfaceHolder holder) {
-					mSurfaceReady = true;
-				}
-				@Override
-				public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-					Log.d(TAG,"Surface Changed !");
-				}
-			};
-			mSurfaceView.getHolder().addCallback(mSurfaceHolderCallback);
-			mSurfaceReady = true;
-		}
+
 	}
 
 	/** Turns the LED on or off if phone has one. */
@@ -188,6 +167,9 @@ public abstract class VideoStream extends MediaStream {
 			}
 
 			Parameters parameters = mCamera.getParameters();
+
+
+
 
 			// We test if the phone has a flash
 			if (parameters.getFlashMode()==null) {
@@ -212,7 +194,7 @@ public abstract class VideoStream extends MediaStream {
 		}
 	}
 
-	/** 
+	/**
 	 * Toggles the LED of the phone if it has one.
 	 * You can get the current state of the flash with {@link VideoStream#getFlashState()}.
 	 */
@@ -225,7 +207,7 @@ public abstract class VideoStream extends MediaStream {
 		return mFlashEnabled;
 	}
 
-	/** 
+	/**
 	 * Sets the orientation of the preview.
 	 * @param orientation The orientation of the preview
 	 */
@@ -233,9 +215,9 @@ public abstract class VideoStream extends MediaStream {
 		mRequestedOrientation = orientation;
 		mUpdated = false;
 	}
-	
-	/** 
-	 * Sets the configuration of the stream. You can call this method at any time 
+
+	/**
+	 * Sets the configuration of the stream. You can call this method at any time
 	 * and changes will take effect next time you call {@link #configure()}.
 	 * @param videoQuality Quality of the stream
 	 */
@@ -246,15 +228,15 @@ public abstract class VideoStream extends MediaStream {
 		}
 	}
 
-	/** 
-	 * Returns the quality of the stream.  
+	/**
+	 * Returns the quality of the stream.
 	 */
 	public VideoQuality getVideoQuality() {
 		return mRequestedQuality;
 	}
 
 	/**
-	 * Some data (SPS and PPS params) needs to be stored when {@link #getSessionDescription()} is called 
+	 * Some data (SPS and PPS params) needs to be stored when {@link #getSessionDescription()} is called
 	 * @param prefs The SharedPreferences that will be used to save SPS and PPS parameters
 	 */
 	public void setPreferences(SharedPreferences prefs) {
@@ -262,17 +244,17 @@ public abstract class VideoStream extends MediaStream {
 	}
 
 	/**
-	 * Configures the stream. You need to call this before calling {@link #getSessionDescription()} 
+	 * Configures the stream. You need to call this before calling {@link #getSessionDescription()}
 	 * to apply your configuration of the stream.
 	 */
 	public synchronized void configure() throws IllegalStateException, IOException {
 		super.configure();
 		mOrientation = mRequestedOrientation;
-	}	
-	
+	}
+
 	/**
 	 * Starts the stream.
-	 * This will also open the camera and display the preview 
+	 * This will also open the camera and display the preview
 	 * if {@link #startPreview()} has not already been called.
 	 */
 	public synchronized void start() throws IllegalStateException, IOException {
@@ -288,7 +270,7 @@ public abstract class VideoStream extends MediaStream {
 				mCamera.setPreviewCallbackWithBuffer(null);
 			}
 			if (mMode == MODE_MEDIACODEC_API_2) {
-				((SurfaceView)mSurfaceView).removeMediaCodecSurface();
+
 			}
 			super.stop();
 			// We need to restart the preview
@@ -304,11 +286,11 @@ public abstract class VideoStream extends MediaStream {
 		}
 	}
 
-	public synchronized void startPreview() 
-			throws CameraInUseException, 
-			InvalidSurfaceException, 
+	public synchronized void startPreview()
+			throws CameraInUseException,
+			InvalidSurfaceException,
 			RuntimeException {
-		
+
 		mCameraOpenedManually = true;
 		if (!mPreviewStarted) {
 			createCamera();
@@ -339,22 +321,23 @@ public abstract class VideoStream extends MediaStream {
 		createCamera();
 
 		// The camera must be unlocked before the MediaRecorder can use it
+		mCamera.stopPreview();
 		unlockCamera();
 
 		try {
 			mMediaRecorder = new MediaRecorder();
 			mMediaRecorder.setCamera(mCamera);
 			mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
-			mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
+			mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
 			mMediaRecorder.setVideoEncoder(mVideoEncoder);
 			mMediaRecorder.setPreviewDisplay(mSurfaceView.getHolder().getSurface());
 			mMediaRecorder.setVideoSize(mRequestedQuality.resX,mRequestedQuality.resY);
 			mMediaRecorder.setVideoFrameRate(mRequestedQuality.framerate);
-
-			// The bandwidth actually consumed is often above what was requested 
+			mMediaRecorder.setOrientationHint(90);
+			// The bandwidth actually consumed is often above what was requested
 			mMediaRecorder.setVideoEncodingBitRate((int)(mRequestedQuality.bitrate*0.8));
 
-			// We write the output of the camera in a local socket instead of a file !			
+			// We write the output of the camera in a local socket instead of a file !
 			// This one little trick makes streaming feasible quiet simply: data from the camera
 			// can then be manipulated at the other end of the socket
 			FileDescriptor fd = null;
@@ -362,7 +345,9 @@ public abstract class VideoStream extends MediaStream {
 				fd = mParcelWrite.getFileDescriptor();
 			} else  {
 				fd = mSender.getFileDescriptor();
+
 			}
+
 			mMediaRecorder.setOutputFile(fd);
 
 			mMediaRecorder.prepare();
@@ -415,7 +400,7 @@ public abstract class VideoStream extends MediaStream {
 			// Uses dequeueInputBuffer to feed the encoder
 			encodeWithMediaCodecMethod1();
 		}
-	}	
+	}
 
 	/**
 	 * Video encoding is done by a MediaCodec.
@@ -449,9 +434,10 @@ public abstract class VideoStream extends MediaStream {
 		mMediaCodec = MediaCodec.createByCodecName(debugger.getEncoderName());
 		MediaFormat mediaFormat = MediaFormat.createVideoFormat("video/avc", mQuality.resX, mQuality.resY);
 		mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, mQuality.bitrate);
-		mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, mQuality.framerate);	
+		mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, mQuality.framerate);
 		mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT,debugger.getEncoderColorFormat());
 		mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
+
 		mMediaCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
 		mMediaCodec.start();
 
@@ -459,29 +445,40 @@ public abstract class VideoStream extends MediaStream {
 			long now = System.nanoTime()/1000, oldnow = now, i=0;
 			ByteBuffer[] inputBuffers = mMediaCodec.getInputBuffers();
 			@Override
-			public void onPreviewFrame(byte[] data, Camera camera) {
-				oldnow = now;
-				now = System.nanoTime()/1000;
-				if (i++>3) {
-					i = 0;
-					//Log.d(TAG,"Measured: "+1000000L/(now-oldnow)+" fps.");
-				}
+			public void onPreviewFrame(byte[] data1, Camera camera) {
 				try {
-					int bufferIndex = mMediaCodec.dequeueInputBuffer(500000);
-					if (bufferIndex>=0) {
-						inputBuffers[bufferIndex].clear();
-						if (data == null) Log.e(TAG,"Symptom of the \"Callback buffer was to small\" problem...");
-						else convertor.convert(data, inputBuffers[bufferIndex]);
-						mMediaCodec.queueInputBuffer(bufferIndex, 0, inputBuffers[bufferIndex].position(), now, 0);
-					} else {
-						Log.e(TAG,"No buffer available !");
+					Log.i(TAG, "|									callback");
+					Camera.Size size = mCamera.getParameters().getPreviewSize();
+//				data=rotateYUV420Degree90(data,size.width,size.width );
+					byte[] data=new byte[data1.length];
+					rotateNV21(data1,data,size.width,size.height,90);
+					oldnow = now;
+					now = System.nanoTime() / 1000;
+					if (i++ > 3) {
+						i = 0;
+						//Log.d(TAG,"Measured: "+1000000L/(now-oldnow)+" fps.");
 					}
-				} finally {
-					mCamera.addCallbackBuffer(data);
-				}				
+					try {
+						int bufferIndex = mMediaCodec.dequeueInputBuffer(500000);
+						if (bufferIndex >= 0) {
+							inputBuffers[bufferIndex].clear();
+							if (data == null)
+								Log.e(TAG, "Symptom of the \"Callback buffer was to small\" problem...");
+							else convertor.convert(data, inputBuffers[bufferIndex]);
+							mMediaCodec.queueInputBuffer(bufferIndex, 0, inputBuffers[bufferIndex].position(), now, 0);
+						} else {
+							Log.e(TAG, "No buffer available !");
+						}
+					} finally {
+						mCamera.addCallbackBuffer(data);
+					}
+				}catch(Exception exception){
+					exception.printStackTrace();
+				}
 			}
+
 		};
-		
+
 		for (int i=0;i<10;i++) mCamera.addCallbackBuffer(new byte[convertor.getBufferSize()]);
 		mCamera.setPreviewCallbackWithBuffer(callback);
 
@@ -497,7 +494,7 @@ public abstract class VideoStream extends MediaStream {
 	 * Video encoding is done by a MediaCodec.
 	 * But here we will use the buffer-to-surface method
 	 */
-	@SuppressLint({ "InlinedApi", "NewApi" })	
+	@SuppressLint({ "InlinedApi", "NewApi" })
 	protected void encodeWithMediaCodecMethod2() throws RuntimeException, IOException {
 
 		Log.d(TAG,"Video encoded using the MediaCodec API with a surface");
@@ -514,12 +511,11 @@ public abstract class VideoStream extends MediaStream {
 		mMediaCodec = MediaCodec.createByCodecName(debugger.getEncoderName());
 		MediaFormat mediaFormat = MediaFormat.createVideoFormat("video/avc", mQuality.resX, mQuality.resY);
 		mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, mQuality.bitrate);
-		mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, mQuality.framerate);	
+		mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, mQuality.framerate);
 		mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
 		mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
 		mMediaCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
 		Surface surface = mMediaCodec.createInputSurface();
-		((SurfaceView)mSurfaceView).addMediaCodecSurface(surface);
 		mMediaCodec.start();
 
 		// The packetizer encapsulates the bit stream in an RTP stream and send it over the network
@@ -531,10 +527,10 @@ public abstract class VideoStream extends MediaStream {
 	}
 
 	/**
-	 * Returns a description of the stream using SDP. 
+	 * Returns a description of the stream using SDP.
 	 * This method can only be called after {@link Stream#configure()}.
 	 * @throws IllegalStateException Thrown when {@link Stream#configure()} wa not called.
-	 */	
+	 */
 	public abstract String getSessionDescription() throws IllegalStateException;
 
 	/**
@@ -568,7 +564,7 @@ public abstract class VideoStream extends MediaStream {
 	protected synchronized void createCamera() throws RuntimeException {
 		if (mSurfaceView == null)
 			throw new InvalidSurfaceException("Invalid surface !");
-		if (mSurfaceView.getHolder() == null || !mSurfaceReady) 
+		if (mSurfaceView.getHolder() == null )
 			throw new InvalidSurfaceException("Invalid surface !");
 
 		if (mCamera == null) {
@@ -588,7 +584,7 @@ public abstract class VideoStream extends MediaStream {
 						stop();
 					} else {
 						Log.e(TAG,"Error unknown with the camera: "+error);
-					}	
+					}
 				}
 			});
 
@@ -598,22 +594,19 @@ public abstract class VideoStream extends MediaStream {
 				// setRecordingHint(true) is a very nice optimization if you plane to only use the Camera for recording
 				Parameters parameters = mCamera.getParameters();
 				if (parameters.getFlashMode()!=null) {
-					parameters.setFlashMode(mFlashEnabled ? Parameters.FLASH_MODE_TORCH : Parameters.FLASH_MODE_OFF);
-
+					parameters.setFlashMode(mFlashEnabled?Parameters.FLASH_MODE_TORCH:Parameters.FLASH_MODE_OFF);
 				}
 
 				if (parameters.getSupportedFocusModes().contains(
 						Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
 					parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
 				}
+
 				parameters.setRecordingHint(true);
 				mCamera.setParameters(parameters);
-//				mCamera.setDisplayOrientation(mOrientation);
-				mCamera.setDisplayOrientation(90);
+				mCamera.setDisplayOrientation(mOrientation);
 				try {
 					if (mMode == MODE_MEDIACODEC_API_2) {
-						mSurfaceView.startGLThread();
-						mCamera.setPreviewTexture(mSurfaceView.getSurfaceTexture());
 					} else {
 						mCamera.setPreviewDisplay(mSurfaceView.getHolder());
 					}
@@ -643,14 +636,14 @@ public abstract class VideoStream extends MediaStream {
 			mCameraLooper.quit();
 			mUnlocked = false;
 			mPreviewStarted = false;
-		}	
+		}
 	}
 
 	protected synchronized void updateCamera() throws RuntimeException {
-		
+
 		// The camera is already correctly configured
 		if (mUpdated) return;
-		
+
 		if (mPreviewStarted) {
 			mPreviewStarted = false;
 			mCamera.stopPreview();
@@ -659,23 +652,20 @@ public abstract class VideoStream extends MediaStream {
 		Parameters parameters = mCamera.getParameters();
 		mQuality = VideoQuality.determineClosestSupportedResolution(parameters, mQuality);
 		int[] max = VideoQuality.determineMaximumSupportedFramerate(parameters);
-		
-		double ratio = (double)mQuality.resX/(double)mQuality.resY;
-		mSurfaceView.requestAspectRatio(ratio);
-		
-		parameters.setPreviewFormat(mCameraImageFormat);
-		parameters.setPreviewSize(mQuality.resX, mQuality.resY);
-		parameters.setPreviewFpsRange(max[0], max[1]);
+
 
 		if (parameters.getSupportedFocusModes().contains(
 				Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
 			parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
 		}
 
+		parameters.setPreviewFormat(mCameraImageFormat);
+		parameters.setPreviewSize(mQuality.resX, mQuality.resY);
+		parameters.setPreviewFpsRange(max[0], max[1]);
+
 		try {
 			mCamera.setParameters(parameters);
-//			mCamera.setDisplayOrientation(mOrientation);
-			mCamera.setDisplayOrientation(90);
+			mCamera.setDisplayOrientation(mOrientation);
 			mCamera.startPreview();
 			mPreviewStarted = true;
 			mUpdated = true;
@@ -700,7 +690,7 @@ public abstract class VideoStream extends MediaStream {
 	protected void unlockCamera() {
 		if (!mUnlocked) {
 			Log.d(TAG,"Unlocking camera");
-			try {	
+			try {
 				mCamera.unlock();
 			} catch (Exception e) {
 				Log.e(TAG,e.getMessage());
@@ -712,7 +702,7 @@ public abstract class VideoStream extends MediaStream {
 
 	/**
 	 * Computes the average frame rate at which the preview callback is called.
-	 * We will then use this average frame rate with the MediaCodec.  
+	 * We will then use this average frame rate with the MediaCodec.
 	 * Blocks the thread in which this function is called.
 	 */
 	private void measureFramerate() {
@@ -751,6 +741,85 @@ public abstract class VideoStream extends MediaStream {
 
 		mCamera.setPreviewCallback(null);
 
-	}	
+	}
+	private byte[] rotateYUV420Degree90(byte[] data, int imageWidth, int imageHeight)
+	{
+//		byte [] yuv = new byte[imageWidth*imageHeight*3/2];
+//		// Rotate the Y luma
+//		int i = 0;
+//		for(int x = 0;x < imageWidth;x++)
+//		{
+//			for(int y = imageHeight-1;y >= 0;y--)
+//			{
+//				yuv[i] = data[y*imageWidth+x];
+//				i++;
+//			}
+//
+//		}
+//		// Rotate the U and V color components
+//		i = imageWidth*imageHeight*3/2-1;
+//		for(int x = imageWidth-1;x > 0;x=x-2)
+//		{
+//			for(int y = 0;y < imageHeight/2;y++)
+//			{
+//				yuv[i] = data[(imageWidth*imageHeight)+(y*imageWidth)+x];
+//				i--;
+//				yuv[i] = data[(imageWidth*imageHeight)+(y*imageWidth)+(x-1)];
+//				i--;
+//			}
+//		}
+//		return yuv;
+		byte[] rotatedData = new byte[data.length];
+		for (int y = 0; y < imageHeight; y++) {
+			for (int x = 0; x < imageWidth; x++)
+				rotatedData[x * imageHeight + imageHeight - y - 1] = data[x + y * imageWidth];
+		}
+
+
+		return rotatedData;
+
+	}
+
+
+
+	public static void rotateNV21(byte[] input, byte[] output, int width, int height, int rotation) {
+		boolean swap = (rotation == 90 || rotation == 270);
+		boolean yflip = (rotation == 90 || rotation == 180);
+		boolean xflip = (rotation == 270 || rotation == 180);
+		for (int x = 0; x < width; x++) {
+			for (int y = 0; y < height; y++) {
+				int xo = x, yo = y;
+				int w = width, h = height;
+				int xi = xo, yi = yo;
+				if (swap) {
+					xi = w * yo / h;
+					yi = h * xo / w;
+				}
+				if (yflip) {
+					yi = h - yi - 1;
+				}
+				if (xflip) {
+					xi = w - xi - 1;
+				}
+				output[w * yo + xo] = input[w * yi + xi];
+				int fs = w * h;
+				int qs = (fs >> 2);
+				xi = (xi >> 1);
+				yi = (yi >> 1);
+				xo = (xo >> 1);
+				yo = (yo >> 1);
+				w = (w >> 1);
+				h = (h >> 1);
+				// adjust for interleave here
+				int ui = fs + (w * yi + xi) * 2;
+				int uo = fs + (w * yo + xo) * 2;
+				// and here
+				int vi = ui + 1;
+				int vo = uo + 1;
+				output[uo] = input[ui];
+				output[vo] = input[vi];
+			}
+		}
+	}
 
 }
